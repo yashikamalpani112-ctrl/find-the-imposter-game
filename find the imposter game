@@ -1,0 +1,633 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Find the Imposter</title>
+<style>
+*{box-sizing:border-box}
+:root{--bg:#171526;--panel:#24223a;--pink:#ff77b7;--text:#f8f7ff;--muted:#b8b5cc}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,sans-serif;min-height:100vh}
+button,input{font:inherit}
+button{border:0;cursor:pointer;border-radius:10px;padding:13px 20px;font-weight:bold}
+button:hover:not(:disabled){filter:brightness(1.1);transform:translateY(-1px)}
+button:disabled{opacity:.4;cursor:not-allowed}
+.primary{background:var(--pink);color:#251329}
+.secondary{background:#393650;color:white}
+.screen{display:none;min-height:100vh;padding:24px;align-items:center;justify-content:center}
+.screen.active{display:flex}
+.container{width:min(650px,100%);margin:auto}
+h1,h2,p{text-align:center}
+h1{font-size:clamp(32px,7vw,54px);margin:0 0 14px}
+h2{margin-top:0}
+p{color:var(--muted);line-height:1.6}
+.logo{font-size:65px;text-align:center;margin-bottom:15px}
+.panel{background:var(--panel);padding:26px;border-radius:18px;border:1px solid #393650}
+.actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:22px}
+.loading-track{height:8px;background:#393650;border-radius:10px;overflow:hidden;margin:25px 0}
+.loading-fill{height:100%;width:0;background:var(--pink);animation:load 1.8s ease forwards}
+@keyframes load{to{width:100%}}
+.rules{height:270px;overflow-y:auto;background:#19182a;border-radius:12px;padding:18px;line-height:1.8;color:#e7e4f5}
+.rules h3{color:var(--pink)}
+.rules li{margin:8px 0}
+.player-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:20px 0}
+.player-card{display:flex;align-items:center;gap:10px;background:#19182a;padding:12px;border-radius:12px}
+.player-dot{width:17px;height:17px;border-radius:50%;flex-shrink:0}
+.player-card input{width:100%;min-width:0;background:transparent;border:0;border-bottom:1px solid #4a4763;padding:8px 2px;color:white;outline:none}
+.player-card input:focus{border-color:var(--pink)}
+.small{font-size:13px;color:var(--muted)}
+.player-turn-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:24px}
+.turn-card{min-height:150px;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#171526;padding:18px;border:3px solid rgba(255,255,255,.2);cursor:pointer;transition:transform .15s,filter .15s}
+.turn-card:hover:not(.done){transform:translateY(-3px);filter:brightness(1.06)}
+.turn-card .player-dot{width:30px;height:30px;border:2px solid rgba(255,255,255,.4)}
+.turn-card strong{font-size:18px;overflow-wrap:anywhere;text-align:center}
+.turn-card.done{opacity:.5;cursor:default;filter:grayscale(.5)}
+.turn-card .viewed{font-size:12px}
+.word-box{text-align:center;border-radius:16px;padding:28px 15px;background:white;color:#191526;margin:22px 0}
+.word-box h2{font-size:clamp(27px,6vw,40px);overflow-wrap:anywhere}
+.word-box.imposter{background:#d9364f;color:white}
+.word-box p{color:inherit;opacity:.85}
+.word-box .hint{font-size:17px;font-weight:bold}
+.progress{height:6px;background:#393650;border-radius:10px;overflow:hidden;margin:14px 0}
+.progress div{height:100%;background:var(--pink);transition:width .2s}
+.vote-option{display:flex;align-items:center;gap:12px;width:100%;background:#19182a;color:white;margin:9px 0;text-align:left;border:2px solid transparent}
+.vote-option.selected{border-color:var(--pink)}
+.vote-option .player-dot{width:22px;height:22px}
+.result{padding:20px;border-radius:14px;text-align:center;background:#19182a;margin:18px 0}
+.winner{font-size:34px;font-weight:bold;margin:15px 0}
+.score-row{display:flex;justify-content:space-between;gap:12px;padding:12px 5px;border-bottom:1px solid #393650}
+.score-row:last-child{border-bottom:0}
+.score-row strong{white-space:nowrap}
+.score-section{background:#19182a;padding:16px;border-radius:14px;margin:18px 0}
+.score-section h2{font-size:20px;color:var(--pink)}
+.topline{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:20px}
+.topline span{color:var(--muted);font-size:14px}
+.pass-message{padding:18px;background:#19182a;border-radius:12px;text-align:center;margin-top:18px}
+.pass-message h2{margin:8px 0}
+@media(max-width:460px){
+.screen{padding:16px}
+.panel{padding:19px}
+.player-grid,.player-turn-grid{grid-template-columns:1fr}
+.logo{font-size:52px}
+.turn-card{min-height:120px}
+}
+</style>
+</head>
+<body>
+
+<section id="loadingScreen" class="screen active">
+<div class="container">
+<div class="logo">🕵️</div>
+<h1>Find the <span style="color:var(--pink)">Imposter</span></h1>
+<p>Trust no one. Find the hidden imposter.</p>
+<div class="loading-track"><div class="loading-fill"></div></div>
+</div>
+</section>
+
+<section id="startScreen" class="screen">
+<div class="container">
+<div class="logo">🕵️</div>
+<h1>Find the <span style="color:var(--pink)">Imposter</span></h1>
+<p>A secret word. One imposter. Can your group find them?</p>
+<div class="actions">
+<button class="primary" onclick="showScreen('rulesScreen')">Start Game</button>
+</div>
+</div>
+</section>
+
+<section id="rulesScreen" class="screen">
+<div class="container panel">
+<h2>How to Play</h2>
+<div class="rules" id="rulesBox">
+<h3>🎮 Setup</h3>
+<ul>
+<li>Play with 2 to 10 players.</li>
+<li>Each player has a different color card.</li>
+<li>Tap your own card to privately reveal your role.</li>
+</ul>
+<h3>🕵️ Secret Roles</h3>
+<ul>
+<li>Most players receive the same secret word.</li>
+<li>One player is the imposter and receives a hint instead.</li>
+<li>After viewing your role, tap Caught It and pass the phone to the next person.</li>
+</ul>
+<h3>💬 Discussion and Voting</h3>
+<ul>
+<li>Discuss clues without saying the secret word directly.</li>
+<li>Vote for the person you think is the imposter.</li>
+<li>If the group catches the imposter, all other players earn one point.</li>
+<li>If the group votes for the wrong player, the imposter earns one point.</li>
+</ul>
+<h3>🏆 Overall Scores</h3>
+<ul>
+<li>Your overall score increases after every round.</li>
+<li>Points from previous rounds are added to your existing score.</li>
+<li>The overall scoreboard shows everyone's total points.</li>
+<li>Scores stay available until you close the browser tab or game session.</li>
+</ul>
+<p>Scroll to the bottom to continue.</p>
+</div>
+<div class="actions">
+<button class="primary" id="gotItButton" disabled onclick="showScreen('setupScreen')">Got It</button>
+</div>
+</div>
+</section>
+
+<section id="setupScreen" class="screen">
+<div class="container panel">
+<h2>Player Setup</h2>
+<p>Start with 2 players and add up to 10 players.</p>
+<div id="playerGrid" class="player-grid"></div>
+<div class="actions">
+<button class="secondary" id="addPlayerButton" onclick="addPlayer()">+ Add Player</button>
+<button class="primary" onclick="beginFirstRound()">Start Round</button>
+</div>
+</div>
+</section>
+
+<section id="revealScreen" class="screen">
+<div class="container panel">
+<div class="topline">
+<span id="roundLabel">Round 1</span>
+<span id="revealProgress"></span>
+</div>
+<h2>Choose Your Color Card</h2>
+<p>Tap your own card. Keep your role secret from everyone else.</p>
+<div id="revealPlayers" class="player-turn-grid"></div>
+<div id="roleArea" hidden>
+<div class="word-box" id="wordBox">
+<p id="roleLabel">YOUR SECRET WORD</p>
+<h2 id="secretWord"></h2>
+<p class="hint" id="secretHint"></p>
+</div>
+<div class="actions">
+<button class="primary" onclick="hideRoleAndContinue()">Caught It ✓</button>
+</div>
+<div class="pass-message">
+<h2>📱 Pass the Phone</h2>
+<p id="passMessage">Pass the phone to the next player. Don't show them your role!</p>
+</div>
+</div>
+<div class="progress"><div id="revealBar" style="width:0%"></div></div>
+<p class="small" id="revealStatus">Choose your own color card to begin.</p>
+</div>
+</section>
+
+<section id="discussionScreen" class="screen">
+<div class="container panel">
+<div class="logo">💬</div>
+<h1>Discussion Time</h1>
+<p>Everyone has seen their role. Discuss clues and try to spot the imposter!</p>
+<p>Give clues without saying the secret word. Discuss carefully and try to spot the imposter!</p>
+<div class="actions">
+<button class="primary" onclick="startVoting()">Start Voting</button>
+</div>
+</div>
+</section>
+
+<section id="votingScreen" class="screen">
+<div class="container panel">
+<h2>🗳️ Vote for the Imposter</h2>
+<p>Select the player your group suspects.</p>
+<div id="voteOptions"></div>
+<div class="actions">
+<button class="primary" id="submitVote" disabled onclick="submitVoting()">Reveal Results</button>
+</div>
+</div>
+</section>
+
+<section id="resultScreen" class="screen">
+<div class="container panel">
+<div class="logo" id="resultEmoji">🏆</div>
+<h1 id="resultTitle">Round Results</h1>
+<div class="result">
+<div class="winner" id="winnerText"></div>
+<p id="resultDetails"></p>
+</div>
+<div class="score-section">
+<h2>⭐ Points This Round</h2>
+<div id="roundScores"></div>
+</div>
+<div class="score-section">
+<h2>🏆 OVERALL SCORES</h2>
+<p>These are your total points from ALL rounds.</p>
+<div id="overallScores"></div>
+</div>
+<div class="actions">
+<button class="primary" onclick="nextRound()">Next Round →</button>
+<button class="secondary" onclick="showScores()">Full Scoreboard</button>
+</div>
+</div>
+</section>
+
+<section id="scoresScreen" class="screen">
+<div class="container panel">
+<h2>🏆 Overall Scoreboard</h2>
+<p>Your total points from every completed round.</p>
+<div id="scoreList"></div>
+<div class="actions">
+<button class="primary" onclick="nextRound()">Next Round →</button>
+<button class="secondary" onclick="showScreen('startScreen')">Main Menu</button>
+</div>
+</div>
+</section>
+
+<script>
+const COLORS=[
+{name:"Red",hex:"#ff3b4f"},
+{name:"Blue",hex:"#388bff"},
+{name:"Green",hex:"#38d996"},
+{name:"Yellow",hex:"#ffd438"},
+{name:"Purple",hex:"#a979ff"},
+{name:"Orange",hex:"#ff8b38"},
+{name:"Cyan",hex:"#39dbe8"},
+{name:"Pink",hex:"#ff77b7"},
+{name:"Lime",hex:"#b8e848"},
+{name:"White",hex:"#eeeeff"}
+];
+
+const WORDS=[
+{word:"Car",category:"Vehicles",hint:"A common way to travel"},
+{word:"Bicycle",category:"Vehicles",hint:"A vehicle powered by people"},
+{word:"Airplane",category:"Vehicles",hint:"A way to travel far away"},
+{word:"Train",category:"Vehicles",hint:"A vehicle that follows tracks"},
+{word:"Bus",category:"Vehicles",hint:"A vehicle that carries many people"},
+{word:"Doctor",category:"People",hint:"Someone who helps people"},
+{word:"Teacher",category:"People",hint:"Someone who shares knowledge"},
+{word:"Singer",category:"People",hint:"Someone who performs with their voice"},
+{word:"Astronaut",category:"People",hint:"Someone who explores beyond Earth"},
+{word:"Chef",category:"People",hint:"Someone who prepares meals"},
+{word:"Pink",category:"Colors",hint:"A color often associated with flowers"},
+{word:"Blue",category:"Colors",hint:"A color often seen in the sky"},
+{word:"Green",category:"Colors",hint:"A color often seen on leaves"},
+{word:"Purple",category:"Colors",hint:"A color made by mixing two colors"},
+{word:"Yellow",category:"Colors",hint:"A bright color associated with sunshine"},
+{word:"Pizza",category:"Food",hint:"A popular food often shared"},
+{word:"Ice cream",category:"Food",hint:"A cold sweet treat"},
+{word:"Mango",category:"Food",hint:"A sweet tropical fruit"},
+{word:"Burger",category:"Food",hint:"A food served between buns"},
+{word:"Chocolate",category:"Food",hint:"A popular sweet treat"},
+{word:"Elephant",category:"Animals",hint:"A large animal with a trunk"},
+{word:"Penguin",category:"Animals",hint:"A bird that cannot fly"},
+{word:"Dolphin",category:"Animals",hint:"An intelligent sea animal"},
+{word:"Rabbit",category:"Animals",hint:"A small animal that hops"},
+{word:"Tiger",category:"Animals",hint:"A large striped wild cat"},
+{word:"School",category:"Places",hint:"A place where people learn"},
+{word:"Beach",category:"Places",hint:"A place beside the sea"},
+{word:"Hospital",category:"Places",hint:"A place where sick people receive care"},
+{word:"Library",category:"Places",hint:"A place filled with books"},
+{word:"Cinema",category:"Places",hint:"A place to watch movies"},
+{word:"Phone",category:"Objects",hint:"A device many people use daily"},
+{word:"Umbrella",category:"Objects",hint:"Something useful in rainy weather"},
+{word:"Mirror",category:"Objects",hint:"An object that shows a reflection"},
+{word:"Clock",category:"Objects",hint:"An object that helps track time"},
+{word:"Backpack",category:"Objects",hint:"Something used to carry belongings"}
+];
+
+const SCORE_KEY="findImposterScoresV3";
+let players=["Player 1","Player 2"];
+let scores=loadScores();
+let round=0;
+let secretWord=null;
+let imposterIndex=-1;
+let previousImposterIndex=-1;
+let currentReveal=-1;
+let revealed=new Set();
+let selectedVote=-1;
+
+function loadScores(){
+try{
+return JSON.parse(sessionStorage.getItem(SCORE_KEY))||{};
+}catch(e){
+return {};
+}
+}
+
+function saveScores(){
+try{
+sessionStorage.setItem(SCORE_KEY,JSON.stringify(scores));
+}catch(e){}
+}
+
+function showScreen(id){
+document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+document.getElementById(id).classList.add("active");
+window.scrollTo(0,0);
+}
+
+setTimeout(()=>showScreen("startScreen"),1900);
+
+const rulesBox=document.getElementById("rulesBox");
+rulesBox.addEventListener("scroll",()=>{
+if(rulesBox.scrollTop+rulesBox.clientHeight>=rulesBox.scrollHeight-5){
+document.getElementById("gotItButton").disabled=false;
+}
+});
+
+function renderPlayers(){
+const grid=document.getElementById("playerGrid");
+grid.innerHTML="";
+players.forEach((name,i)=>{
+const card=document.createElement("div");
+card.className="player-card";
+
+const dot=document.createElement("span");
+dot.className="player-dot";
+dot.style.background=COLORS[i].hex;
+
+const input=document.createElement("input");
+input.type="text";
+input.maxLength=22;
+input.value=name;
+input.setAttribute("aria-label","Player "+(i+1)+" name");
+input.addEventListener("input",()=>{players[i]=input.value;});
+
+card.append(dot,input);
+grid.appendChild(card);
+});
+document.getElementById("addPlayerButton").disabled=players.length>=10;
+}
+
+function addPlayer(){
+if(players.length>=10)return;
+players.push("Player "+(players.length+1));
+renderPlayers();
+}
+
+renderPlayers();
+
+function cleanNames(){
+players=players.map((name,i)=>name.trim()||("Player "+(i+1)));
+const used={};
+
+players=players.map(name=>{
+const key=name.toLowerCase();
+used[key]=(used[key]||0)+1;
+return used[key]>1?name+" "+used[key]:name;
+});
+
+players.forEach(name=>{
+if(typeof scores[name]!=="number")scores[name]=0;
+});
+saveScores();
+}
+
+function beginFirstRound(){
+cleanNames();
+round=0;
+previousImposterIndex=-1;
+startRound();
+}
+
+function startRound(){
+cleanNames();
+round++;
+secretWord=WORDS[Math.floor(Math.random()*WORDS.length)];
+
+let possible=players.map((_,i)=>i);
+if(possible.length>1&&previousImposterIndex>=0){
+possible=possible.filter(i=>i!==previousImposterIndex);
+}
+imposterIndex=possible[Math.floor(Math.random()*possible.length)];
+previousImposterIndex=imposterIndex;
+
+revealed=new Set();
+currentReveal=-1;
+selectedVote=-1;
+
+document.getElementById("roundLabel").textContent="Round "+round;
+document.getElementById("roleArea").hidden=true;
+document.getElementById("revealPlayers").hidden=false;
+document.getElementById("revealBar").style.width="0%";
+
+renderRevealPlayers();
+showScreen("revealScreen");
+}
+
+function nextRound(){
+startRound();
+}
+
+function renderRevealPlayers(){
+const grid=document.getElementById("revealPlayers");
+grid.innerHTML="";
+
+players.forEach((name,i)=>{
+const card=document.createElement("div");
+card.className="turn-card"+(revealed.has(i)?" done":"");
+card.style.background=COLORS[i].hex;
+card.setAttribute("role","button");
+card.setAttribute("tabindex",revealed.has(i)?"-1":"0");
+
+const dot=document.createElement("span");
+dot.className="player-dot";
+dot.style.background="rgba(255,255,255,.6)";
+
+const label=document.createElement("strong");
+label.textContent=name;
+
+const colorLabel=document.createElement("span");
+colorLabel.className="viewed";
+colorLabel.textContent=revealed.has(i)?"Role viewed ✓":COLORS[i].name+" card";
+
+card.append(dot,label,colorLabel);
+
+if(!revealed.has(i)){
+card.addEventListener("click",()=>revealRole(i));
+card.addEventListener("keydown",e=>{
+if(e.key==="Enter"||e.key===" "){
+e.preventDefault();
+revealRole(i);
+}
+});
+}
+grid.appendChild(card);
+});
+
+document.getElementById("revealProgress").textContent=revealed.size+"/"+players.length;
+document.getElementById("revealBar").style.width=(revealed.size/players.length*100)+"%";
+document.getElementById("revealStatus").textContent=
+revealed.size===players.length
+?"Everyone has viewed their role."
+:"Tap your own colored card to reveal your role.";
+}
+
+function revealRole(i){
+if(revealed.has(i)||currentReveal!==-1)return;
+currentReveal=i;
+
+document.getElementById("revealPlayers").hidden=true;
+document.getElementById("roleArea").hidden=false;
+
+const isImposter=i===imposterIndex;
+const box=document.getElementById("wordBox");
+box.classList.toggle("imposter",isImposter);
+
+document.getElementById("roleLabel").textContent=
+isImposter?"YOUR ROLE":"YOUR SECRET WORD";
+
+document.getElementById("secretWord").textContent=
+isImposter?"IMPOSTER":secretWord.word;
+
+document.getElementById("secretHint").textContent=
+isImposter?"Hint: "+secretWord.hint:"Keep this word secret!";
+
+document.getElementById("passMessage").textContent=
+"Pass the phone to the next player. Don't show them your role!";
+}
+
+function hideRoleAndContinue(){
+if(currentReveal<0)return;
+revealed.add(currentReveal);
+currentReveal=-1;
+
+document.getElementById("roleArea").hidden=true;
+document.getElementById("revealPlayers").hidden=false;
+renderRevealPlayers();
+
+if(revealed.size===players.length){
+document.getElementById("revealPlayers").hidden=true;
+document.getElementById("revealStatus").textContent="All roles have been viewed!";
+
+setTimeout(()=>{
+if(document.getElementById("revealScreen").classList.contains("active")){
+showScreen("discussionScreen");
+}
+},500);
+}
+}
+
+function startVoting(){
+selectedVote=-1;
+const options=document.getElementById("voteOptions");
+options.innerHTML="";
+document.getElementById("submitVote").disabled=true;
+
+players.forEach((name,i)=>{
+const button=document.createElement("button");
+button.className="vote-option";
+
+const dot=document.createElement("span");
+dot.className="player-dot";
+dot.style.background=COLORS[i].hex;
+
+const label=document.createElement("span");
+label.textContent=name;
+button.append(dot,label);
+
+button.addEventListener("click",()=>{
+selectedVote=i;
+options.querySelectorAll("button").forEach(b=>b.classList.remove("selected"));
+button.classList.add("selected");
+document.getElementById("submitVote").disabled=false;
+});
+options.appendChild(button);
+});
+showScreen("votingScreen");
+}
+
+function submitVoting(){
+if(selectedVote<0)return;
+const caught=selectedVote===imposterIndex;
+
+const winners=caught
+?players.map((_,i)=>i).filter(i=>i!==imposterIndex)
+:[imposterIndex];
+
+winners.forEach(i=>{
+const name=players[i];
+scores[name]=(scores[name]||0)+1;
+});
+saveScores();
+
+document.getElementById("resultEmoji").textContent=caught?"🎉":"🕵️";
+document.getElementById("resultTitle").textContent="Round "+round+" Results";
+document.getElementById("winnerText").textContent=
+caught?"PLAYERS WIN!":"IMPOSTER WINS!";
+
+document.getElementById("resultDetails").textContent=
+players[imposterIndex]+" was the imposter. The secret word was \""+
+secretWord.word+"\". "+players[selectedVote]+" was your group's vote.";
+
+renderRoundScores(winners);
+renderOverallScores();
+showScreen("resultScreen");
+}
+
+function renderRoundScores(winners){
+const rows=document.getElementById("roundScores");
+rows.innerHTML="";
+
+players.forEach((name,i)=>{
+const row=document.createElement("div");
+row.className="score-row";
+
+const left=document.createElement("span");
+left.textContent=name+(i===imposterIndex?" (Imposter)":"");
+
+const right=document.createElement("strong");
+right.textContent=winners.includes(i)?"+1 point":"0 points";
+
+row.append(left,right);
+rows.appendChild(row);
+});
+}
+
+function renderOverallScores(){
+const list=document.getElementById("overallScores");
+list.innerHTML="";
+const entries=Object.entries(scores).sort((a,b)=>b[1]-a[1]);
+
+if(entries.length===0){
+list.textContent="No scores yet!";
+return;
+}
+
+entries.forEach(([name,score],i)=>{
+const row=document.createElement("div");
+row.className="score-row";
+
+const left=document.createElement("span");
+left.textContent=(i===0&&score>0?"🥇 ":"")+name;
+
+const right=document.createElement("strong");
+right.textContent=score+" point"+(score===1?"":"s");
+
+row.append(left,right);
+list.appendChild(row);
+});
+}
+
+function showScores(){
+renderScoreboard();
+showScreen("scoresScreen");
+}
+
+function renderScoreboard(){
+const list=document.getElementById("scoreList");
+list.innerHTML="";
+const entries=Object.entries(scores).sort((a,b)=>b[1]-a[1]);
+
+if(entries.length===0){
+list.textContent="No scores yet. Play a round to begin!";
+return;
+}
+
+entries.forEach(([name,score],i)=>{
+const row=document.createElement("div");
+row.className="score-row";
+
+const left=document.createElement("span");
+left.textContent=(i===0&&score>0?"🥇 ":"")+(i+1)+". "+name;
+
+const right=document.createElement("strong");
+right.textContent=score+" point"+(score===1?"":"s");
+
+row.append(left,right);
+list.appendChild(row);
+});
+}
+</script>
+</body>
+</html>
