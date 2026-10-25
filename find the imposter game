@@ -8,7 +8,25 @@
 <style>
 *{box-sizing:border-box}
 :root{--bg:#171526;--panel:#24223a;--pink:#ff77b7;--text:#f8f7ff;--muted:#b8b5cc}
-body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,sans-serif;min-height:100vh}
+
+/* NEW: Playful animated red, blue, yellow and green background */
+body{
+margin:0;
+background:linear-gradient(135deg,#ff3b4f,#388bff,#ffd438,#38d996,#ff3b4f);
+background-size:400% 400%;
+animation:playfulBackground 12s ease infinite;
+color:var(--text);
+font-family:Arial,sans-serif;
+min-height:100vh
+}
+@keyframes playfulBackground{
+0%{background-position:0% 50%}
+25%{background-position:50% 100%}
+50%{background-position:100% 50%}
+75%{background-position:50% 0%}
+100%{background-position:0% 50%}
+}
+
 button,input{font:inherit}
 button{border:0;cursor:pointer;border-radius:10px;padding:13px 20px;font-weight:bold}
 button:hover:not(:disabled){filter:brightness(1.1);transform:translateY(-1px)}
@@ -65,6 +83,22 @@ p{color:var(--muted);line-height:1.6}
 .topline span{color:var(--muted);font-size:14px}
 .pass-message{padding:18px;background:#19182a;border-radius:12px;text-align:center;margin-top:18px}
 .pass-message h2{margin:8px 0}
+#roleArea[hidden]{display:none!important}
+#wordBox{
+width:min(100%,400px);
+min-height:220px;
+margin:22px auto;
+display:flex;
+flex-direction:column;
+align-items:center;
+justify-content:center;
+gap:10px;
+cursor:pointer;
+border:3px solid rgba(255,255,255,.25);
+}
+#wordBox h2{margin:0}
+#wordBox .hint{margin:0}
+
 @media(max-width:460px){
 .screen{padding:16px}
 .panel{padding:19px}
@@ -146,31 +180,37 @@ p{color:var(--muted);line-height:1.6}
 </div>
 </section>
 
+<!-- Secret card: appears directly for each player -->
 <section id="revealScreen" class="screen">
 <div class="container panel">
 <div class="topline">
 <span id="roundLabel">Round 1</span>
 <span id="revealProgress"></span>
 </div>
-<h2>Choose Your Color Card</h2>
-<p>Tap your own card. Keep your role secret from everyone else.</p>
-<div id="revealPlayers" class="player-turn-grid"></div>
-<div id="roleArea" hidden>
-<div class="word-box" id="wordBox">
-<p id="roleLabel">YOUR SECRET WORD</p>
-<h2 id="secretWord"></h2>
-<p class="hint" id="secretHint"></p>
+<h2 id="turnTitle">Player 1's Turn</h2>
+<p id="turnInstructions">Make sure nobody else is looking!</p>
+
+<div id="wordBox" class="turn-card" role="button" tabindex="0"
+aria-label="Tap the secret card to reveal your role"
+onclick="revealRole()"
+onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();revealRole();}">
+<p id="roleLabel">🃏 SECRET CARD</p>
+<h2 id="secretWord">Tap to Reveal</h2>
+<p class="hint" id="secretHint">Your role will appear here.</p>
 </div>
+
+<div id="roleArea" hidden>
 <div class="actions">
 <button class="primary" onclick="hideRoleAndContinue()">Caught It ✓</button>
 </div>
 <div class="pass-message">
 <h2>📱 Pass the Phone</h2>
-<p id="passMessage">Pass the phone to the next player. Don't show them your role!</p>
+<p id="passMessage">Remember your role, then pass the phone.</p>
 </div>
 </div>
+
 <div class="progress"><div id="revealBar" style="width:0%"></div></div>
-<p class="small" id="revealStatus">Choose your own color card to begin.</p>
+<p class="small" id="revealStatus">Tap the secret card to begin.</p>
 </div>
 </section>
 
@@ -393,76 +433,55 @@ imposterIndex=possible[Math.floor(Math.random()*possible.length)];
 previousImposterIndex=imposterIndex;
 
 revealed=new Set();
-currentReveal=-1;
+currentReveal=0;
 selectedVote=-1;
 
 document.getElementById("roundLabel").textContent="Round "+round;
 document.getElementById("roleArea").hidden=true;
-document.getElementById("revealPlayers").hidden=false;
-document.getElementById("revealBar").style.width="0%";
 
-renderRevealPlayers();
+setupSecretCard();
 showScreen("revealScreen");
 }
 
-function nextRound(){
-startRound();
-}
+function setupSecretCard(){
+const card=document.getElementById("wordBox");
 
-function renderRevealPlayers(){
-const grid=document.getElementById("revealPlayers");
-grid.innerHTML="";
+card.className="turn-card";
+card.style.background=COLORS[currentReveal].hex;
+card.style.color="#171526";
+card.style.cursor="pointer";
 
-players.forEach((name,i)=>{
-const card=document.createElement("div");
-card.className="turn-card"+(revealed.has(i)?" done":"");
-card.style.background=COLORS[i].hex;
-card.setAttribute("role","button");
-card.setAttribute("tabindex",revealed.has(i)?"-1":"0");
+document.getElementById("turnTitle").textContent=
+players[currentReveal]+"'s Turn";
 
-const dot=document.createElement("span");
-dot.className="player-dot";
-dot.style.background="rgba(255,255,255,.6)";
+document.getElementById("turnInstructions").textContent=
+"Make sure nobody else is looking!";
 
-const label=document.createElement("strong");
-label.textContent=name;
+document.getElementById("roleLabel").textContent="🃏 SECRET CARD";
+document.getElementById("secretWord").textContent="Tap to Reveal";
+document.getElementById("secretHint").textContent="Your role will appear here.";
 
-const colorLabel=document.createElement("span");
-colorLabel.className="viewed";
-colorLabel.textContent=revealed.has(i)?"Role viewed ✓":COLORS[i].name+" card";
+document.getElementById("roleArea").hidden=true;
+document.getElementById("revealProgress").textContent=
+revealed.size+"/"+players.length;
 
-card.append(dot,label,colorLabel);
+document.getElementById("revealBar").style.width=
+(revealed.size/players.length*100)+"%";
 
-if(!revealed.has(i)){
-card.addEventListener("click",()=>revealRole(i));
-card.addEventListener("keydown",e=>{
-if(e.key==="Enter"||e.key===" "){
-e.preventDefault();
-revealRole(i);
-}
-});
-}
-grid.appendChild(card);
-});
-
-document.getElementById("revealProgress").textContent=revealed.size+"/"+players.length;
-document.getElementById("revealBar").style.width=(revealed.size/players.length*100)+"%";
 document.getElementById("revealStatus").textContent=
-revealed.size===players.length
-?"Everyone has viewed their role."
-:"Tap your own colored card to reveal your role.";
+"Tap the card to reveal your role.";
 }
 
-function revealRole(i){
-if(revealed.has(i)||currentReveal!==-1)return;
-currentReveal=i;
+function revealRole(){
+if(currentReveal<0||currentReveal>=players.length)return;
+if(revealed.has(currentReveal))return;
+if(!document.getElementById("roleArea").hidden)return;
 
-document.getElementById("revealPlayers").hidden=true;
-document.getElementById("roleArea").hidden=false;
+const isImposter=currentReveal===imposterIndex;
+const card=document.getElementById("wordBox");
 
-const isImposter=i===imposterIndex;
-const box=document.getElementById("wordBox");
-box.classList.toggle("imposter",isImposter);
+card.className=isImposter?"word-box imposter":"word-box";
+card.style.cursor="default";
 
 document.getElementById("roleLabel").textContent=
 isImposter?"YOUR ROLE":"YOUR SECRET WORD";
@@ -473,29 +492,43 @@ isImposter?"IMPOSTER":secretWord.word;
 document.getElementById("secretHint").textContent=
 isImposter?"Hint: "+secretWord.hint:"Keep this word secret!";
 
+document.getElementById("roleArea").hidden=false;
 document.getElementById("passMessage").textContent=
-"Pass the phone to the next player. Don't show them your role!";
+"Remember your role, then pass the phone to the next player.";
+
+document.getElementById("revealStatus").textContent=
+"After viewing your role, tap Caught It ✓.";
 }
 
 function hideRoleAndContinue(){
 if(currentReveal<0)return;
+if(document.getElementById("roleArea").hidden)return;
+
 revealed.add(currentReveal);
 currentReveal=-1;
-
 document.getElementById("roleArea").hidden=true;
-document.getElementById("revealPlayers").hidden=false;
-renderRevealPlayers();
 
 if(revealed.size===players.length){
-document.getElementById("revealPlayers").hidden=true;
-document.getElementById("revealStatus").textContent="All roles have been viewed!";
+document.getElementById("revealProgress").textContent=
+players.length+"/"+players.length;
+document.getElementById("revealBar").style.width="100%";
+document.getElementById("revealStatus").textContent=
+"All roles have been viewed!";
 
 setTimeout(()=>{
 if(document.getElementById("revealScreen").classList.contains("active")){
 showScreen("discussionScreen");
 }
 },500);
+return;
 }
+
+currentReveal=players.findIndex((_,i)=>!revealed.has(i));
+setupSecretCard();
+}
+
+function nextRound(){
+startRound();
 }
 
 function startVoting(){
